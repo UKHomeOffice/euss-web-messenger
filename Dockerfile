@@ -1,4 +1,4 @@
-FROM quay.io/ukhomeofficedigital/hof-nodejs:20.19.0-alpine3.21-v2@sha256:ab9686c7cf77bab94ab32c1c0e262b2a5242c2cbff61b0bbb3f62610b4f2e706 AS builder
+FROM quay.io/ukhomeofficedigital/hof-nodejs:20.20.2-alpine3.23@sha256:bcd17b68a0f1910f1670b07f6a47d1e2c28291bafc219807c494dc62b57ea25e AS builder
 USER root
 
 # Switch to UK Alpine mirrors, update package index and upgrade all installed packages
@@ -58,7 +58,6 @@ RUN rm /etc/nginx/conf.d/default.conf
 
 COPY --from=builder /app/dist /usr/share/nginx/html/
 COPY --from=builder /app/env.json /usr/share/nginx/html
-COPY --from=builder /app/google862eca84e8b12823.html /usr/share/nginx/html/
 COPY --from=builder /app/generate-env.sh .
 COPY --from=builder /app/nginx/app.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/nginx/nginx.conf /etc/nginx/nginx.conf
