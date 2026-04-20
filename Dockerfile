@@ -17,14 +17,14 @@ COPY . /app
 # Copy package.json and yarn.lock for better layer caching
 COPY --chown=999:998 package.json yarn.lock ./
 
-# Set npm/yarn configurations for Alpine builds and Parcel compatibility
+# Set npm/yarn configurations for Alpine builds and Vite compatibility
 RUN yarn config set network-timeout 300000 && \
     yarn config set cache-folder /tmp/yarn-cache && \
     yarn config set target_platform linux && \
     yarn config set target_arch x64 && \
     yarn config set target_libc musl
 
-# Install dependencies with proper platform handling for Parcel
+# Install dependencies with proper platform handling for Vite
 RUN set -e && \
     echo "Starting yarn install..." && \
     yarn install --frozen-lockfile --production=false --verbose --network-timeout 300000 && \

@@ -5,7 +5,7 @@ import './styles/styles.scss';
 
 /**
  * Load the environment config first to support running the app
- * statically (once built with parcel). This ensures a consistent
+ * statically (once built with vite). This ensures a consistent
  * approach to loading environment variables whether running locally
  * or in production.
  */
