@@ -8,7 +8,7 @@ export default function AccessibilityStatement() {
   return (
     <>
       <h1 className="govuk-heading-xl">
-        Accessibility statement for the EUSS (EU Settlement Service).
+        Accessibility statement for the EUSS (EU Settlement Service)
       </h1>
 
       <p className="govuk-body">
