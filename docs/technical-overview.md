@@ -92,7 +92,6 @@ The service is deployed onto Kubernetes, all manifest files can be found in the 
 
 - `yarn dev` — vite dev server on port 3000
 - `yarn build` — vite build (production)
-- `yarn build-prod` — production build to be used in the Docker build
 - `yarn test` — run Jest tests with coverage
 
 ## Key files
