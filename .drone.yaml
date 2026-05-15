@@ -223,10 +223,14 @@ steps:
         from_secret: drone_git_token
     commands:
       - apk add --no-cache curl jq zip
+      - test -n "$GITHUB_TOKEN" || (echo "Missing GITHUB_TOKEN secret. Ensure drone_git_token is available to this pull_request build." && exit 1)
+      - test -n "$DRONE_PULL_REQUEST" || (echo "Missing DRONE_PULL_REQUEST. This step only supports pull_request builds." && exit 1)
+      - export REPO_SLUG="${DRONE_REPO:-$GIT_REPO}"
+      - test -n "$REPO_SLUG" || (echo "Missing repository slug (DRONE_REPO/GIT_REPO)." && exit 1)
       - test -d playwright-report || (echo "Missing playwright-report directory" && exit 1)
       - export REPORT_ARCHIVE="playwright-report-pr-${DRONE_PULL_REQUEST}-${DRONE_BUILD_NUMBER}.zip"
       - zip -r "$REPORT_ARCHIVE" playwright-report
-      - export GH_API="https://api.github.com/repos/${GIT_REPO}"
+      - export GH_API="https://api.github.com/repos/${REPO_SLUG}"
       - export TAG_NAME="pr-${DRONE_PULL_REQUEST}-playwright-report"
       - |
         RELEASE_RESPONSE=$(curl -sS \
