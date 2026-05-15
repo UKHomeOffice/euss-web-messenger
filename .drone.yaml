@@ -182,6 +182,9 @@ steps:
         from_secret: KUBE_SERVER_DEV
       KUBE_TOKEN:
         from_secret: KUBE_TOKEN_DEV
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
     commands:
       - bin/deploy.sh $${BRANCH_ENV}
     when:
@@ -191,6 +194,86 @@ steps:
     depends_on:
       - clone_repos
       - push_ecr
+
+  # Run playwright tests against the pull request branch environment
+  - name: e2e_tests
+    pull: if-not-exists
+    image: mcr.microsoft.com/playwright:v1.60.0-noble
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
+    commands:
+      - yarn playwright install --with-deps
+      - yarn install --frozen-lockfile
+      - test -s /root/.dockersock/branch_url.txt || (echo "Missing deployed branch URL at /root/.dockersock/branch_url.txt" && exit 1)
+      - CI=true PLAYWRIGHT_BASE_URL="https://$(cat /root/.dockersock/branch_url.txt)" yarn test:e2e
+    when:
+      branch:
+        <<: *include_all_branches
+      event: pull_request
+    depends_on:
+      - deploy_to_branch
+
+  # Upload Playwright HTML report for PR and comment a download link
+  - name: publish_e2e_report_to_pr
+    pull: if-not-exists
+    image: alpine:3.21
+    environment:
+      GITHUB_TOKEN:
+        from_secret: drone_git_token
+    commands:
+      - apk add --no-cache curl jq zip
+      - test -n "$GITHUB_TOKEN" || (echo "Missing GITHUB_TOKEN secret. Ensure drone_git_token is available to this pull_request build." && exit 1)
+      - test -n "$DRONE_PULL_REQUEST" || (echo "Missing DRONE_PULL_REQUEST. This step only supports pull_request builds." && exit 1)
+      - export REPO_SLUG="${DRONE_REPO:-$GIT_REPO}"
+      - test -n "$REPO_SLUG" || (echo "Missing repository slug (DRONE_REPO/GIT_REPO)." && exit 1)
+      - test -d playwright-report || (echo "Missing playwright-report directory" && exit 1)
+      - export REPORT_ARCHIVE="playwright-report-pr-${DRONE_PULL_REQUEST}-${DRONE_BUILD_NUMBER}.zip"
+      - zip -r "$REPORT_ARCHIVE" playwright-report
+      - export GH_API="https://api.github.com/repos/${REPO_SLUG}"
+      - export TAG_NAME="pr-${DRONE_PULL_REQUEST}-playwright-report"
+      - |
+        RELEASE_RESPONSE=$(curl -sS \
+          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "${GH_API}/releases/tags/${TAG_NAME}")
+      - |
+        if [ "$(echo "$RELEASE_RESPONSE" | jq -r '.id // empty')" = "" ]; then
+          RELEASE_RESPONSE=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${GH_API}/releases" \
+            -d "$(jq -n --arg tag "$TAG_NAME" --arg name "Playwright Report PR #${DRONE_PULL_REQUEST}" '{tag_name:$tag,name:$name,prerelease:true,draft:false}')")
+        fi
+      - export RELEASE_ID="$(echo "$RELEASE_RESPONSE" | jq -r '.id')"
+      - |
+        for ASSET_ID in $(echo "$RELEASE_RESPONSE" | jq -r --arg prefix "playwright-report-pr-${DRONE_PULL_REQUEST}-" '.assets[]? | select(.name | startswith($prefix)) | .id'); do
+          curl -sS -X DELETE \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${GH_API}/releases/assets/${ASSET_ID}" >/dev/null
+        done
+      - |
+        ASSET_RESPONSE=$(curl -sS -X POST \
+          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+          -H "Content-Type: application/zip" \
+          --data-binary @"${REPORT_ARCHIVE}" \
+          "https://uploads.github.com/repos/${GIT_REPO}/releases/${RELEASE_ID}/assets?name=${REPORT_ARCHIVE}")
+      - export DOWNLOAD_URL="$(echo "$ASSET_RESPONSE" | jq -r '.browser_download_url')"
+      - test "$DOWNLOAD_URL" != "null" || (echo "Failed to upload report asset" && echo "$ASSET_RESPONSE" && exit 1)
+      - |
+        curl -sS -X POST \
+          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "${GH_API}/issues/${DRONE_PULL_REQUEST}/comments" \
+          -d "$(jq -n --arg url "$DOWNLOAD_URL" --arg build "$DRONE_BUILD_LINK" '{body:("Playwright HTML report for this PR build is available here:\n\n" + $url + "\n\nDrone build: " + $build)}')"
+    when:
+      branch:
+        <<: *include_all_branches
+      event: pull_request
+    depends_on:
+      - e2e_tests
+  
   # Deploy to Master UAT environment
   - name: deploy_to_uat
     pull: if-not-exists
