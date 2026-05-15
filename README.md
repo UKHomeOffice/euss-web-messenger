@@ -147,6 +147,24 @@ docker run --rm --env-file .env -p 8000:80 euss-web-messenger:local
 yarn test
 ```
 
+- Install Playwright browser binaries:
+
+```bash
+yarn playwright:install
+```
+
+- Run Playwright end-to-end tests:
+
+```bash
+yarn test:e2e
+```
+
+- Run Playwright tests in headed mode:
+
+```bash
+yarn test:e2e:headed
+```
+
 - Run ESLint:
 
 ```bash
