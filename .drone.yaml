@@ -214,26 +214,79 @@ steps:
     depends_on:
       - deploy_to_branch
 
-  # Upload Playwright HTML report for PR and comment a download link
-  - name: publish_e2e_report_to_pr
+  # Generate short-lived GitHub App installation token for report publishing
+  - name: generate_github_app_token
     pull: if-not-exists
     image: alpine:3.21
     environment:
-      GITHUB_TOKEN:
-        from_secret: drone_git_token
+      GITHUB_APP_ID:
+        from_secret: github_app_id
+      GITHUB_APP_INSTALLATION_ID:
+        from_secret: github_app_installation_id
+      GITHUB_APP_PRIVATE_KEY:
+        from_secret: github_app_private_key
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
     commands:
-      - apk add --no-cache bash curl jq zip
-      - test -n "$GITHUB_TOKEN" || (echo "Missing GITHUB_TOKEN secret. Ensure drone_git_token is available to this pull_request build." && exit 1)
-      - test -n "$DRONE_PULL_REQUEST" || (echo "Missing DRONE_PULL_REQUEST. This step only supports pull_request builds." && exit 1)
-      - export DRONE_REPO="${DRONE_REPO:-$GIT_REPO}"
-      - test -n "$DRONE_REPO" || (echo "Missing repository slug (DRONE_REPO/GIT_REPO)." && exit 1)
-      - bash bin/publish_e2e_test_report.sh
+      - apk add --no-cache curl jq openssl
+      - test -n "$GITHUB_APP_ID" || (echo "Missing GITHUB_APP_ID secret." && exit 1)
+      - test -n "$GITHUB_APP_INSTALLATION_ID" || (echo "Missing GITHUB_APP_INSTALLATION_ID secret." && exit 1)
+      - test -n "$GITHUB_APP_PRIVATE_KEY" || (echo "Missing GITHUB_APP_PRIVATE_KEY secret." && exit 1)
+      - printf '%b' "$GITHUB_APP_PRIVATE_KEY" > /tmp/github_app_private_key.pem
+      - chmod 600 /tmp/github_app_private_key.pem
+      - |
+        b64url() {
+          openssl base64 -A | tr '+/' '-_' | tr -d '='
+        }
+        NOW=$(date +%s)
+        EXP=$((NOW + 540))
+        HEADER_B64=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+        PAYLOAD_B64=$(printf '{"iat":%s,"exp":%s,"iss":"%s"}' "$NOW" "$EXP" "$GITHUB_APP_ID" | b64url)
+        UNSIGNED_TOKEN="${HEADER_B64}.${PAYLOAD_B64}"
+        SIGNATURE_B64=$(printf '%s' "$UNSIGNED_TOKEN" | openssl dgst -binary -sha256 -sign /tmp/github_app_private_key.pem | b64url)
+        JWT="${UNSIGNED_TOKEN}.${SIGNATURE_B64}"
+
+        TOKEN_RESPONSE=$(curl -sS -X POST \
+          -H "Authorization: Bearer ${JWT}" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens")
+
+        TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
+        test -n "$TOKEN" || (echo "Failed to create GitHub App installation token" && echo "$TOKEN_RESPONSE" && exit 1)
+
+        printf '%s' "$TOKEN" > /root/.dockersock/github_app_token.txt
+        chmod 600 /root/.dockersock/github_app_token.txt
+      - rm -f /tmp/github_app_private_key.pem
     when:
       branch:
         <<: *include_all_branches
       event: pull_request
     depends_on:
       - e2e_tests
+
+  # Upload Playwright HTML report for PR and comment a download link
+  - name: publish_e2e_report_to_pr
+    pull: if-not-exists
+    image: alpine:3.21
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
+    commands:
+      - apk add --no-cache bash curl jq zip
+      - test -n "$DRONE_PULL_REQUEST" || (echo "Missing DRONE_PULL_REQUEST. This step only supports pull_request builds." && exit 1)
+      - export DRONE_REPO="${DRONE_REPO:-$GIT_REPO}"
+      - test -n "$DRONE_REPO" || (echo "Missing repository slug (DRONE_REPO/GIT_REPO)." && exit 1)
+      - test -s /root/.dockersock/github_app_token.txt || (echo "Missing GitHub App token file from generate_github_app_token step." && exit 1)
+      - export GITHUB_APP_TOKEN="$(cat /root/.dockersock/github_app_token.txt)"
+      - bash bin/publish_e2e_test_report.sh
+      - rm -f /root/.dockersock/github_app_token.txt
+    when:
+      branch:
+        <<: *include_all_branches
+      event: pull_request
+    depends_on:
+      - generate_github_app_token
   
   # Deploy to Master UAT environment
   - name: deploy_to_uat

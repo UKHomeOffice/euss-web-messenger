@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This script is intended for testing the report publishing logic locally. It simulates the environment variables that would be set in a Drone CI build and attempts to publish a Playwright report as a release asset on GitHub, then posts a comment to the PR with the download link.
-# export GITHUB_TOKEN="TOKEN_HERE"
+# export GITHUB_APP_TOKEN="TOKEN_HERE"
 # export DRONE_PULL_REQUEST="PR_NUMBER_HERE"
 # export DRONE_REPO="UKHomeOffice/euss-web-messenger"
 # export DRONE_BUILD_NUMBER="BUILD_NUMBER_HERE"
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 # Required environment variables
-: "${GITHUB_TOKEN:?Missing GITHUB_TOKEN}"
+: "${GITHUB_APP_TOKEN:?Missing GITHUB_APP_TOKEN}"
 : "${DRONE_PULL_REQUEST:?Missing DRONE_PULL_REQUEST}"
 : "${DRONE_REPO:?Missing DRONE_REPO}"
 : "${DRONE_BUILD_NUMBER:?Missing DRONE_BUILD_NUMBER}"
@@ -32,13 +32,13 @@ TAG_NAME="pr-${DRONE_PULL_REQUEST}-playwright-report"
 
 RELEASE_RESPONSE_FILE="$(mktemp)"
 RELEASE_HTTP_CODE="$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w "%{http_code}" \
-  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
   -H "Accept: application/vnd.github+json" \
   "${GH_API}/releases/tags/${TAG_NAME}")"
 
 if [ "$RELEASE_HTTP_CODE" = "404" ]; then
   RELEASE_HTTP_CODE="$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w "%{http_code}" -X POST \
-    -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+    -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
     -H "Accept: application/vnd.github+json" \
     "${GH_API}/releases" \
     -d "$(jq -n --arg tag "$TAG_NAME" --arg name "Playwright Report PR #${DRONE_PULL_REQUEST}" '{tag_name:$tag,name:$name,prerelease:true,draft:false}')")"
@@ -69,7 +69,7 @@ fi
 
 for ASSET_ID in $(jq -r --arg prefix "playwright-report-pr-${DRONE_PULL_REQUEST}-" '.assets[]? | select(.name | startswith($prefix)) | .id' "$RELEASE_RESPONSE_FILE"); do
   curl -sS -X DELETE \
-    -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+    -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
     -H "Accept: application/vnd.github+json" \
     "${GH_API}/releases/assets/${ASSET_ID}" >/dev/null
 done
@@ -78,7 +78,7 @@ rm -f "$RELEASE_RESPONSE_FILE"
 
 ASSET_RESPONSE_FILE="$(mktemp)"
 UPLOAD_HTTP_CODE="$(curl -sS -o "$ASSET_RESPONSE_FILE" -w "%{http_code}" -X POST \
-  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
   -H "Content-Type: application/zip" \
   --data-binary @"${REPORT_ARCHIVE}" \
   "https://uploads.github.com/repos/${DRONE_REPO}/releases/${RELEASE_ID}/assets?name=${REPORT_ARCHIVE}")"
@@ -115,7 +115,7 @@ EOF
 )
 
 GH_COMMENT_RESPONSE=$(curl -sS -X POST \
-  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
   -H "Accept: application/vnd.github+json" \
   "${GH_API}/issues/${DRONE_PULL_REQUEST}/comments" \
   -d "$(jq -n --arg body "$COMMENT_BODY" '{body: $body}')")
