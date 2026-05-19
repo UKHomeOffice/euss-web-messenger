@@ -42,6 +42,16 @@ UNSIGNED_TOKEN="${HEADER_B64}.${PAYLOAD_B64}"
 SIGNATURE_B64=$(printf "%s" "${UNSIGNED_TOKEN}" | openssl dgst -binary -sha256 -sign /tmp/github_app_private_key.pem | b64url)
 JWT="${UNSIGNED_TOKEN}.${SIGNATURE_B64}"
 
+APP_RESPONSE=$(curl -sS \
+  -H "Authorization: Bearer ${JWT}" \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/app")
+APP_SLUG=$(echo "${APP_RESPONSE}" | jq -r '.slug // empty')
+APP_ID_FROM_API=$(echo "${APP_RESPONSE}" | jq -r '.id // empty')
+test -n "${APP_SLUG}" || (echo "Failed to authenticate as GitHub App using provided APP_ID/private key" && echo "${APP_RESPONSE}" && exit 1)
+
+echo "Authenticated GitHub App: ${APP_SLUG} (id: ${APP_ID_FROM_API})"
+
 if [ -z "${INSTALLATION_ID}" ]; then
   [ -n "${REPO_SLUG}" ] || { echo "Missing repo slug for installation discovery (DRONE_REPO/GIT_REPO)"; exit 1; }
   INSTALLATION_RESPONSE=$(curl -sS \
@@ -49,7 +59,7 @@ if [ -z "${INSTALLATION_ID}" ]; then
     -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/${REPO_SLUG}/installation")
   INSTALLATION_ID=$(echo "${INSTALLATION_RESPONSE}" | jq -r '.id // empty')
-  test -n "${INSTALLATION_ID}" || (echo "Failed to discover app installation for ${REPO_SLUG}" && echo "${INSTALLATION_RESPONSE}" && exit 1)
+  test -n "${INSTALLATION_ID}" || (echo "Failed to discover app installation for ${REPO_SLUG}. Ensure app ${APP_SLUG} is installed on this repo (or included in selected repositories)." && echo "${INSTALLATION_RESPONSE}" && exit 1)
 fi
 
 echo "Attempting GitHub App token generation for repo ${REPO_SLUG:-unknown} using installation ${INSTALLATION_ID}"
@@ -74,7 +84,7 @@ if [ -z "${TOKEN}" ] && [ "$(echo "${TOKEN_RESPONSE}" | jq -r '.status // empty'
     -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/${REPO_SLUG}/installation")
   DISCOVERED_INSTALLATION_ID=$(echo "${INSTALLATION_RESPONSE}" | jq -r '.id // empty')
-  test -n "${DISCOVERED_INSTALLATION_ID}" || (echo "Failed to discover app installation for ${REPO_SLUG}" && echo "${INSTALLATION_RESPONSE}" && exit 1)
+  test -n "${DISCOVERED_INSTALLATION_ID}" || (echo "Failed to discover app installation for ${REPO_SLUG}. Ensure app ${APP_SLUG} is installed on this repo (or included in selected repositories)." && echo "${INSTALLATION_RESPONSE}" && exit 1)
   INSTALLATION_ID="${DISCOVERED_INSTALLATION_ID}"
   echo "Retrying token generation with discovered installation ${INSTALLATION_ID}"
   TOKEN_RESPONSE="$(request_installation_token "${INSTALLATION_ID}")"
