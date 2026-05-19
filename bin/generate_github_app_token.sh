@@ -52,12 +52,35 @@ if [ -z "${INSTALLATION_ID}" ]; then
   test -n "${INSTALLATION_ID}" || (echo "Failed to discover app installation for ${REPO_SLUG}" && echo "${INSTALLATION_RESPONSE}" && exit 1)
 fi
 
-TOKEN_RESPONSE=$(curl -sS -X POST \
-  -H "Authorization: Bearer ${JWT}" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/app/installations/${INSTALLATION_ID}/access_tokens")
+echo "Attempting GitHub App token generation for repo ${REPO_SLUG:-unknown} using installation ${INSTALLATION_ID}"
 
-TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r ".token // empty")
+request_installation_token() {
+  local installation_id="$1"
+  curl -sS -X POST \
+    -H "Authorization: Bearer ${JWT}" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/app/installations/${installation_id}/access_tokens"
+}
+
+TOKEN_RESPONSE="$(request_installation_token "${INSTALLATION_ID}")"
+TOKEN="$(echo "${TOKEN_RESPONSE}" | jq -r '.token // empty')"
+
+# If the configured installation ID is stale/wrong, retry by discovering installation from repo.
+if [ -z "${TOKEN}" ] && [ "$(echo "${TOKEN_RESPONSE}" | jq -r '.status // empty')" = "404" ]; then
+  [ -n "${REPO_SLUG}" ] || { echo "Missing repo slug for 404 recovery (DRONE_REPO/GIT_REPO)"; exit 1; }
+  echo "Installation ${INSTALLATION_ID} not found for this app. Discovering installation from repo ${REPO_SLUG}..."
+  INSTALLATION_RESPONSE=$(curl -sS \
+    -H "Authorization: Bearer ${JWT}" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/${REPO_SLUG}/installation")
+  DISCOVERED_INSTALLATION_ID=$(echo "${INSTALLATION_RESPONSE}" | jq -r '.id // empty')
+  test -n "${DISCOVERED_INSTALLATION_ID}" || (echo "Failed to discover app installation for ${REPO_SLUG}" && echo "${INSTALLATION_RESPONSE}" && exit 1)
+  INSTALLATION_ID="${DISCOVERED_INSTALLATION_ID}"
+  echo "Retrying token generation with discovered installation ${INSTALLATION_ID}"
+  TOKEN_RESPONSE="$(request_installation_token "${INSTALLATION_ID}")"
+  TOKEN="$(echo "${TOKEN_RESPONSE}" | jq -r '.token // empty')"
+fi
+
 test -n "${TOKEN}" || (echo "Failed to create GitHub App installation token" && echo "${TOKEN_RESPONSE}" && exit 1)
 
 mkdir -p "$(dirname "${OUTPUT_TOKEN_FILE}")"
