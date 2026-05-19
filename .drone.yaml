@@ -232,8 +232,7 @@ steps:
       - apk add --no-cache bash curl jq openssl
       - test -n "$GITHUB_APP_ID" || (echo "Missing GITHUB_APP_ID secret." && exit 1)
       - test -n "$GITHUB_APP_PRIVATE_KEY" || (echo "Missing GITHUB_APP_PRIVATE_KEY secret." && exit 1)
-      - export DRONE_REPO="${DRONE_REPO:-$GIT_REPO}"
-      - test -n "$DRONE_REPO" || (echo "Missing repository slug (DRONE_REPO/GIT_REPO)." && exit 1)
+      - test -n "$GITHUB_APP_INSTALLATION_ID" || (echo "Missing GITHUB_APP_INSTALLATION_ID secret." && exit 1)
       - OUTPUT_TOKEN_FILE=/root/.dockersock/github_app_token.txt bash bin/generate_github_app_token.sh
     when:
       branch:
