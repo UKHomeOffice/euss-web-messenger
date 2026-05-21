@@ -63,11 +63,11 @@ steps:
     image: alpine:3.21
     environment:
       GITHUB_APP_ID:
-        from_secret: github_app_id
+        from_secret: HOF_GH_APP_ID
       GITHUB_APP_PRIVATE_KEY:
-        from_secret: github_app_private_key
+        from_secret: HOF_GH_APP_PK
       GITHUB_APP_INSTALLATION_ID:
-        from_secret: github_app_installation_id
+        from_secret: HOF_GH_APP_INSTALL_ID
     volumes:
       - name: dockersock
         path: /root/.dockersock
