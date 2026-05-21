@@ -58,20 +58,48 @@ sonar_scanner: &sonar_scanner
     - sonar-scanner -Dproject.settings=./sonar-project.properties
 
 steps:
-  - name: clone_repos
-    image: alpine/git
+  - name: generate_github_app_token_for_clone
+    pull: if-not-exists
+    image: alpine:3.21
     environment:
-      DRONE_GIT_USERNAME:
-        from_secret: drone_git_username
-      DRONE_GIT_TOKEN:
-        from_secret: drone_git_token
+      HOF_GH_APP_ID:
+        from_secret: github_app_id
+      HOF_GH_APP_PK:
+        from_secret: github_app_private_key
+      HOF_GH_APP_INSTALL_ID:
+        from_secret: github_app_installation_id
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
     commands:
-      - git clone https://$${DRONE_GIT_USERNAME}:$${DRONE_GIT_TOKEN}@github.com/UKHomeOfficeForms/hof-services-config.git
-      - find hof-services-config/* | grep -v $HOF_CONFIG | grep -v 'infrastructure' | xargs rm -rf
+      - apk add --no-cache bash curl jq openssl
+      - test -n "$GITHUB_APP_ID" || (echo "Missing GITHUB_APP_ID secret." && exit 1)
+      - test -n "$GITHUB_APP_PRIVATE_KEY" || (echo "Missing GITHUB_APP_PRIVATE_KEY secret." && exit 1)
+      - test -n "$GITHUB_APP_INSTALLATION_ID" || (echo "Missing GITHUB_APP_INSTALLATION_ID secret." && exit 1)
+      - OUTPUT_TOKEN_FILE=/root/.dockersock/github_app_token_for_clone.txt bash bin/generate_github_app_token.sh
     when:
       branch:
         <<: *include_all_branches
       event: [push, pull_request]
+
+  - name: clone_repos
+    image: alpine/git
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
+    commands:
+      - test -s /root/.dockersock/github_app_token_for_clone.txt || (echo "Missing GitHub App token file for clone step." && exit 1)
+      - export GITHUB_TOKEN="$(cat /root/.dockersock/github_app_token_for_clone.txt)"
+      - git clone https://x-access-token:$${GITHUB_TOKEN}@github.com/UKHomeOfficeForms/hof-services-config.git
+      - find hof-services-config/* | grep -v $HOF_CONFIG | grep -v 'infrastructure' | xargs rm -rf
+      - rm -f /root/.dockersock/github_app_token_for_clone.txt
+    when:
+      branch:
+        <<: *include_all_branches
+      event: [push, pull_request]
+    depends_on:
+      - generate_github_app_token_for_clone
+      
   - name: scan_base_image_os
     pull: always
     image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/acp/trivy/client:latest
@@ -219,20 +247,20 @@ steps:
     pull: if-not-exists
     image: alpine:3.21
     environment:
-      GITHUB_APP_ID:
-        from_secret: github_app_id
-      GITHUB_APP_PRIVATE_KEY:
-        from_secret: github_app_private_key
-      GITHUB_APP_INSTALLATION_ID:
-        from_secret: github_app_installation_id
+      HOF_UKHO_GH_APP_ID:
+        from_secret: hof_ukho_gh_app_id
+      HOF_UKHO_GH_APP_PK:
+        from_secret: hof_ukho_gh_app_pk
+      HOF_UKHO_GH_APP_INSTALL_ID:
+        from_secret: hof_ukho_gh_app_install_id
     volumes:
       - name: dockersock
         path: /root/.dockersock
     commands:
       - apk add --no-cache bash curl jq openssl
-      - test -n "$GITHUB_APP_ID" || (echo "Missing GITHUB_APP_ID secret." && exit 1)
-      - test -n "$GITHUB_APP_PRIVATE_KEY" || (echo "Missing GITHUB_APP_PRIVATE_KEY secret." && exit 1)
-      - test -n "$GITHUB_APP_INSTALLATION_ID" || (echo "Missing GITHUB_APP_INSTALLATION_ID secret." && exit 1)
+      - test -n "$HOF_UKHO_GH_APP_ID" || (echo "Missing HOF_UKHO_GH_APP_ID secret." && exit 1)
+      - test -n "$HOF_UKHO_GH_APP_PK" || (echo "Missing HOF_UKHO_GH_APP_PK secret." && exit 1)
+      - test -n "$HOF_UKHO_GH_APP_INSTALL_ID" || (echo "Missing HOF_UKHO_GH_APP_INSTALL_ID secret." && exit 1)
       - OUTPUT_TOKEN_FILE=/root/.dockersock/github_app_token.txt bash bin/generate_github_app_token.sh
     when:
       branch:
@@ -321,18 +349,44 @@ steps:
       - get_pr_branch
       - deploy_to_uat
 
-  - name: clone_repos_stg
-    image: alpine/git
+  - name: generate_github_app_token_for_clone_stg
+    pull: if-not-exists
+    image: alpine:3.21
     environment:
-      DRONE_GIT_USERNAME:
-        from_secret: drone_git_username
-      DRONE_GIT_TOKEN:
-        from_secret: drone_git_token
+      HOF_GH_APP_ID:
+        from_secret: hof_gh_app_id
+      HOF_GH_APP_PK:
+        from_secret: hof_gh_app_pk
+      HOF_GH_APP_INSTALL_ID:
+        from_secret: hof_gh_app_install_id
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
     commands:
-      - git clone https://$${DRONE_GIT_USERNAME}:$${DRONE_GIT_TOKEN}@github.com/UKHomeOfficeForms/hof-services-config.git
+      - apk add --no-cache bash curl jq openssl
+      - test -n "$HOF_GH_APP_ID" || (echo "Missing HOF_GH_APP_ID secret." && exit 1)
+      - test -n "$HOF_GH_APP_PK" || (echo "Missing HOF_GH_APP_PK secret." && exit 1)
+      - test -n "$HOF_GH_APP_INSTALL_ID" || (echo "Missing HOF_GH_APP_INSTALL_ID secret." && exit 1)
+      - OUTPUT_TOKEN_FILE=/root/.dockersock/github_app_token_for_clone_stg.txt bash bin/generate_github_app_token.sh
     when:
       target: STG
       event: promote
+
+  - name: clone_repos_stg
+    image: alpine/git
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
+    commands:
+      - test -s /root/.dockersock/github_app_token_for_clone_stg.txt || (echo "Missing GitHub App token file for STG clone step." && exit 1)
+      - export GITHUB_TOKEN="$(cat /root/.dockersock/github_app_token_for_clone_stg.txt)"
+      - git clone https://x-access-token:$${GITHUB_TOKEN}@github.com/UKHomeOfficeForms/hof-services-config.git
+      - rm -f /root/.dockersock/github_app_token_for_clone_stg.txt
+    when:
+      target: STG
+      event: promote
+    depends_on:
+      - generate_github_app_token_for_clone_stg
 
   - name: deploy_to_stg
     pull: if-not-exists
@@ -365,20 +419,46 @@ steps:
       target: PROD
       event: promote
 
-  - name: clone_repos_prod
-    image: alpine/git
+  - name: generate_github_app_token_for_clone_prod
+    pull: if-not-exists
+    image: alpine:3.21
     environment:
-      DRONE_GIT_USERNAME:
-        from_secret: drone_git_username
-      DRONE_GIT_TOKEN:
-        from_secret: drone_git_token
+      HOF_GH_APP_ID:
+        from_secret: hof_gh_app_id
+      HOF_GH_APP_PK:
+        from_secret: hof_gh_app_pk
+      HOF_GH_APP_INSTALL_ID:
+        from_secret: hof_gh_app_install_id
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
     commands:
-      - git clone https://$${DRONE_GIT_USERNAME}:$${DRONE_GIT_TOKEN}@github.com/UKHomeOfficeForms/hof-services-config.git
+      - apk add --no-cache bash curl jq openssl
+      - test -n "$HOF_GH_APP_ID" || (echo "Missing HOF_GH_APP_ID secret." && exit 1)
+      - test -n "$HOF_GH_APP_PK" || (echo "Missing HOF_GH_APP_PK secret." && exit 1)
+      - test -n "$HOF_GH_APP_INSTALL_ID" || (echo "Missing HOF_GH_APP_INSTALL_ID secret." && exit 1)
+      - OUTPUT_TOKEN_FILE=/root/.dockersock/github_app_token_for_clone_prod.txt bash bin/generate_github_app_token.sh
     when:
       target: PROD
       event: promote
     depends_on:
       - sanity_check_build_prod
+
+  - name: clone_repos_prod
+    image: alpine/git
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
+    commands:
+      - test -s /root/.dockersock/github_app_token_for_clone_prod.txt || (echo "Missing GitHub App token file for PROD clone step." && exit 1)
+      - export GITHUB_TOKEN="$(cat /root/.dockersock/github_app_token_for_clone_prod.txt)"
+      - git clone https://x-access-token:$${GITHUB_TOKEN}@github.com/UKHomeOfficeForms/hof-services-config.git
+      - rm -f /root/.dockersock/github_app_token_for_clone_prod.txt
+    when:
+      target: PROD
+      event: promote
+    depends_on:
+      - generate_github_app_token_for_clone_prod
 
   # Deploy to Production environment
   - name: deploy_to_prod
@@ -398,18 +478,44 @@ steps:
       - clone_repos_prod
 
     # CRON job steps that runs security scans using Trivy
-  - name: cron_clone_repos
-    image: alpine/git
+  - name: generate_github_app_token_for_clone_cron
+    pull: if-not-exists
+    image: alpine:3.21
     environment:
-      DRONE_GIT_USERNAME:
-        from_secret: DRONE_GIT_USERNAME
-      DRONE_GIT_TOKEN:
-        from_secret: DRONE_GIT_TOKEN
+      HOF_GH_APP_ID:
+        from_secret: hof_gh_app_id
+      HOF_GH_APP_PK:
+        from_secret: hof_gh_app_pk
+      HOF_GH_APP_INSTALL_ID:
+        from_secret: hof_gh_app_install_id
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
     commands:
-      - git clone https://$${DRONE_GIT_USERNAME}:$${DRONE_GIT_TOKEN}@github.com/UKHomeOfficeForms/hof-services-config.git
+      - apk add --no-cache bash curl jq openssl
+      - test -n "$HOF_GH_APP_ID" || (echo "Missing HOF_GH_APP_ID secret." && exit 1)
+      - test -n "$HOF_GH_APP_PK" || (echo "Missing HOF_GH_APP_PK secret." && exit 1)
+      - test -n "$HOF_GH_APP_INSTALL_ID" || (echo "Missing HOF_GH_APP_INSTALL_ID secret." && exit 1)
+      - OUTPUT_TOKEN_FILE=/root/.dockersock/github_app_token_for_clone_cron.txt bash bin/generate_github_app_token.sh
     when:
       cron: security_scans
       event: cron
+
+  - name: cron_clone_repos
+    image: alpine/git
+    volumes:
+      - name: dockersock
+        path: /root/.dockersock
+    commands:
+      - test -s /root/.dockersock/github_app_token_for_clone_cron.txt || (echo "Missing GitHub App token file for CRON clone step." && exit 1)
+      - export GITHUB_TOKEN="$(cat /root/.dockersock/github_app_token_for_clone_cron.txt)"
+      - git clone https://x-access-token:$${GITHUB_TOKEN}@github.com/UKHomeOfficeForms/hof-services-config.git
+      - rm -f /root/.dockersock/github_app_token_for_clone_cron.txt
+    when:
+      cron: security_scans
+      event: cron
+    depends_on:
+      - generate_github_app_token_for_clone_cron
 
   - name: cron_build_image
     image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/acp/dind
