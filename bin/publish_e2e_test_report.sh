@@ -10,7 +10,7 @@
 set -euo pipefail
 
 # Required environment variables
-: "${GITHUB_APP_TOKEN:?Missing GITHUB_APP_TOKEN}"
+: "${GITHUB_TOKEN:?Missing GITHUB_TOKEN}"
 : "${DRONE_PULL_REQUEST:?Missing DRONE_PULL_REQUEST}"
 : "${DRONE_REPO:?Missing DRONE_REPO}"
 : "${DRONE_BUILD_NUMBER:?Missing DRONE_BUILD_NUMBER}"
