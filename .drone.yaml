@@ -282,7 +282,7 @@ steps:
       - export DRONE_REPO="$${DRONE_REPO:-$GIT_REPO}"
       - test -n "$DRONE_REPO" || (echo "Missing repository slug (DRONE_REPO/GIT_REPO)." && exit 1)
       - test -s /root/.dockersock/github_app_token.txt || (echo "Missing GitHub App token file from generate_github_app_token step." && exit 1)
-      - export GITHUB_TOKEN="$(cat /root/.dockersock/github_app_token.txt)"
+      - export GITHUB_APP_TOKEN="$(cat /root/.dockersock/github_app_token.txt)"
       - bash bin/publish_e2e_test_report.sh
       - rm -f /root/.dockersock/github_app_token.txt
     when:
