@@ -52,5 +52,9 @@
     "playwright-bdd": "^9.2.1",
     "sass-embedded": "^1.98.0",
     "vite": "^8.0.3"
+  },
+  "resolutions": {
+    "brace-expansion": "^5.0.10",
+    "ip-address": "^10.7.1"
   }
 }
