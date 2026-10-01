@@ -1,4 +1,4 @@
-FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS builder
+FROM quay.io/ukhomeofficedigital/hof-nodejs:24.21.0-alpine3.24-v3@sha256:0db6a51fc5c32294de98ec928a933ddc194554041a878b5b6b4cc5bf5bf18a44 AS builder
 
 USER root
 
