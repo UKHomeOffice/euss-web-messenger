@@ -2,6 +2,9 @@ FROM quay.io/ukhomeofficedigital/hof-nodejs:24.21.0-alpine3.24-v4@sha256:c5d1333
 
 USER root
 
+# Base alpine image ships no runtime, so install node & yarn from the apk repos
+RUN apk add --no-cache nodejs yarn
+
 # Setup nodejs group & nodejs user
 RUN addgroup --system nodejs --gid 998 && \
     adduser --system nodejs --uid 999 --home /app/ && \
@@ -48,6 +51,9 @@ FROM nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed4307
 USER root
 
 WORKDIR /app
+
+# Patch CVE-2026-93990 (libexpat) present in the pinned base image
+RUN apk upgrade --no-cache libexpat
 
 # Remove default NGINX config
 RUN rm /etc/nginx/conf.d/default.conf
