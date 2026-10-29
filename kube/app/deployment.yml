@@ -98,7 +98,7 @@ spec:
               name: public
         - name: nginx-proxy
           # nginx-proxy-govuk:v4.4 with error pages alma linux is the base and upgraded 14/07
-          image: quay.io/ukhomeofficedigital/hof-docker-nginx-proxy:0.0.8
+          image: quay.io/ukhomeofficedigital/nginx-proxy-govuk@sha256:4470064d0b1d20ae08c5fd85551576cb687f342a22d6cb456fda9b2c4ce8c8df
           resources:
             requests:
               memory: 64Mi
