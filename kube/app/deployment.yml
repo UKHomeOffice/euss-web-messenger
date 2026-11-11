@@ -116,7 +116,7 @@ spec:
           securityContext:
             runAsNonRoot: true
         - name: hof-logging-api
-          image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/sas/hof-logging-api:v0.4.0
+          image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/sas/hof-logging-api:v0.4.1
           ports:
             - containerPort: 8081
           env:
