@@ -1,4 +1,4 @@
-FROM quay.io/ukhomeofficedigital/hof-nodejs:24.21.0-alpine3.24-v4@sha256:c5d1333e7e965464258596faf4ac16a0eadd36029270ed0d8d94ec9003cae19d AS builder
+FROM quay.io/ukhomeofficedigital/hof-nodejs:24.22.2_3-alpine@sha256:ebf742568d6fa9505e5b8740dbb6bf7f4d38ea3a22fc2a940ee57cfa3a95a41e AS builder
 
 USER root
 
@@ -46,14 +46,14 @@ RUN yarn build
 
 # Create production image
 
-FROM nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 AS final
+FROM nginx:stable-alpine3.24-slim@sha256:e2355aa95529a7999dad94ddcb45a8768abf6fb0b204c93b1a3ffce477d7b893 AS final
     
 USER root
 
 WORKDIR /app
 
-# Patch CVE-2026-93990 (libexpat) present in the pinned base image
-RUN apk upgrade --no-cache libexpat
+# PatchCVE-2026-4738 (zlib) present in the pinned base image
+RUN apk upgrade --no-cache zlib
 
 # Remove default NGINX config
 RUN rm /etc/nginx/conf.d/default.conf
